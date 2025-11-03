@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flask-app
+  template:
+    metadata:
+      labels:
+        app: flask-app
+    spec:
+      containers:
+      - name: flask-app
+        image: meenakshimadhu/csgy-9223-f-cloud-computing-assignment-2-flask-app:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MONGO_HOST
+          value: "mongodb-service"
+        - name: MONGO_PORT
+          value: "27017"
+        - name: FLASK_ENV
+          value: "production"
+        - name: PORT
+          value: "5000"
