@@ -4,6 +4,11 @@ metadata:
   name: flask-deployment
 spec:
   replicas: 3
+  # strategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxUnavailable: 1
+  #     maxSurge: 1
   selector:
     matchLabels:
       app: flask-app
@@ -14,7 +19,7 @@ spec:
     spec:
       containers:
       - name: flask-app
-        image: meenakshimadhu/csgy-9223-f-cloud-computing-assignment-2-flask-app:latest
+        image: meenakshimadhu/csgy-9223-f-cloud-computing-assignment-2-flask-app:v2.0
         ports:
         - containerPort: 5000
         env:
@@ -26,3 +31,22 @@ spec:
           value: "production"
         - name: PORT
           value: "5000"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1

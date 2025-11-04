@@ -11,7 +11,7 @@ db = client.camp2016    #Select the database
 todos = db.todo #Select the collection
 
 app = Flask(__name__)
-title = "TODO with Flask"
+title = "TODO with Flask v2.0"
 heading = "ToDo Reminder"
 #modify=ObjectId()
 

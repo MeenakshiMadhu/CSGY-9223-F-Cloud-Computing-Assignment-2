@@ -1,0 +1,140 @@
+# prometheus-values.yaml
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+      slack_api_url: 'https://hooks.slack.com/services/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' 
+    
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'slack'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'slack-critical'
+        - match:
+            severity: warning
+          receiver: 'slack-warning'
+    
+    receivers:
+      - name: 'slack'
+        slack_configs:
+          - channel: '#k8s-alerts' 
+            title: 'Kubernetes Alert'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+      
+      - name: 'slack-critical'
+        slack_configs:
+          - channel: '#k8s-alerts'
+            title: '🚨 CRITICAL Alert'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+      
+      - name: 'slack-warning'
+        slack_configs:
+          - channel: '#k8s-alerts'
+            title: '⚠️ Warning'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+
+# Custom alert rules for probe failures and pod issues
+additionalPrometheusRulesMap:
+  probe-alerts:
+    groups:
+      - name: pod_alerts
+        interval: 30s
+        rules:
+          # Alert when pod is deleted or not running
+          - alert: PodDown
+            expr: kube_pod_status_phase{phase="Failed"} == 1 or kube_pod_status_phase{phase="Unknown"} == 1
+            for: 30s
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is down"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been in {{ $labels.phase }} state for more than 30 seconds."
+          
+          # Alert when pod is not ready
+          - alert: PodNotReady
+            expr: kube_pod_status_ready{condition="false"} == 1
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 1 minute."
+          
+          # Alert when container is waiting or terminated
+          - alert: ContainerNotRunning
+            expr: kube_pod_container_status_waiting == 1 or kube_pod_container_status_terminated == 1
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} is not running"
+              description: "Container has been in a non-running state for more than 1 minute."
+          
+          # Alert when pod restarts
+          - alert: PodRestartingTooMuch
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently"
+              description: "Container {{ $labels.container }} has restarted {{ printf \"%.0f\" $value }} times in the last 15 minutes."
+          
+          # Alert when container restart count is high
+          - alert: ContainerRestartThresholdExceeded
+            expr: kube_pod_container_status_restarts_total > 3
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Container {{ $labels.container }} has restarted too many times"
+              description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times total."
+          
+          # Alert for liveness probe failures
+          - alert: LivenessProbeFailure
+            expr: sum by (namespace, pod) (prober_probe_total{probe_type="Liveness", result="failed"}) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Liveness probe failing for pod {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Liveness probe has failed {{ $value }} times for pod {{ $labels.pod }} in namespace {{ $labels.namespace }}."
+          
+          # Alert for readiness probe failures
+          - alert: ReadinessProbeFailure
+            expr: sum by (namespace, pod) (prober_probe_total{probe_type="Readiness", result="failed"}) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Readiness probe failing for pod {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Readiness probe has failed {{ $value }} times for pod {{ $labels.pod }} in namespace {{ $labels.namespace }}."
+
+# Grafana configuration
+grafana:
+  enabled: true
+  adminPassword: 1l3lxOpb6pDGzSmPXkeXOIpzdrzw3IhTIq46SU0F
